@@ -1,6 +1,7 @@
 import type { DefaultSession } from 'next-auth';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports
 import { useSession } from 'next-auth/react';
+import { useMemo } from 'react';
 export type CheckedUser = {
   id: string;
   name: string;
@@ -34,12 +35,21 @@ export function useCurrentUser(): CheckedUser {
 
   const user = session?.user;
 
-  return {
-    id: user?.id ?? 'REPLACE_ME_DEFAULT_ID',
-    name: user?.name ?? 'REPLACE_ME_DEFAULT_NAME',
-    email: user?.email ?? 'REPLACE_ME_DEFAULT_EMAIL',
-    image: user?.image ?? 'REPLACE_ME_DEFAULT_URL',
-    hasPassword: user?.hasPassword ?? false,
+  return useMemo(() => {
+    return {
+      id: user?.id ?? 'REPLACE_ME_DEFAULT_ID',
+      name: user?.name ?? 'REPLACE_ME_DEFAULT_NAME',
+      email: user?.email ?? 'REPLACE_ME_DEFAULT_EMAIL',
+      image: user?.image ?? 'REPLACE_ME_DEFAULT_URL',
+      hasPassword: user?.hasPassword ?? false,
+      update,
+    };
+  }, [
     update,
-  };
+    user?.email,
+    user?.hasPassword,
+    user?.id,
+    user?.image,
+    user?.name,
+  ]);
 }
