@@ -82,6 +82,7 @@ export function useAppHelper() {
               pageMode: setPageModeAtom,
             },
           });
+          console.log(blockSuiteWorkspace.meta.blockVersions);
         }
         set(workspaces => [
           ...workspaces,
