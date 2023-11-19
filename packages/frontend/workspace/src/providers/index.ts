@@ -17,9 +17,8 @@ import {
   createAffineAwarenessProvider,
   createBroadcastChannelAwarenessProvider,
 } from './awareness';
+import { createLocalStorage } from './storage';
 import { createAffineStorage } from './storage/affine';
-import { createIndexedDBStorage } from './storage/indexeddb';
-import { createSQLiteStorage } from './storage/sqlite';
 import { SyncEngine } from './sync';
 
 export * from './sync';
@@ -27,13 +26,7 @@ export * from './sync';
 export const createLocalProviders = (): DocProviderCreator[] => {
   return [
     (_, doc, { awareness }) => {
-      const engine = new SyncEngine(
-        doc,
-        environment.isDesktop
-          ? createSQLiteStorage(doc.guid)
-          : createIndexedDBStorage(doc.guid),
-        []
-      );
+      const engine = new SyncEngine(doc, createLocalStorage(doc.guid), []);
 
       const awarenessProviders = [
         createBroadcastChannelAwarenessProvider(doc.guid, awareness),
@@ -83,13 +76,9 @@ export const createLocalProviders = (): DocProviderCreator[] => {
 export const createAffineProviders = (): DocProviderCreator[] => {
   return [
     (_, doc, { awareness }) => {
-      const engine = new SyncEngine(
-        doc,
-        environment.isDesktop
-          ? createSQLiteStorage(doc.guid)
-          : createIndexedDBStorage(doc.guid),
-        [createAffineStorage(doc.guid)]
-      );
+      const engine = new SyncEngine(doc, createLocalStorage(doc.guid), [
+        createAffineStorage(doc.guid),
+      ]);
 
       const awarenessProviders = [
         createBroadcastChannelAwarenessProvider(doc.guid, awareness),

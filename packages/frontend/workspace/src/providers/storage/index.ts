@@ -27,3 +27,10 @@ export interface Storage {
 export * from './affine';
 export * from './indexeddb';
 export * from './sqlite';
+
+import { createIndexedDBStorage } from './indexeddb';
+import { createSQLiteStorage } from './sqlite';
+
+export const createLocalStorage = environment.isDesktop
+  ? createSQLiteStorage
+  : createIndexedDBStorage;
