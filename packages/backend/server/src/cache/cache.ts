@@ -36,6 +36,7 @@ export interface Cache {
   mapIncrease(map: string, key: string, count?: number): Promise<number>;
   mapDecrease(map: string, key: string, count?: number): Promise<number>;
   mapGet(map: string, key: string): Promise<any>;
+  mapDelete(map: string, key: string): Promise<boolean>;
   mapRandomKey(map: string): Promise<string | undefined>;
   mapLen(map: string): Promise<number>;
 }
@@ -241,6 +242,19 @@ export class LocalCache implements Cache {
     return this.setMap(map, data, {
       ttl: raw?.expires ? raw.expires - Date.now() : undefined,
     });
+  }
+
+  async mapDelete(map: string, key: string): Promise<boolean> {
+    const raw = await this.getMap(map);
+
+    if (raw?.value) {
+      delete raw.value[key];
+      return this.setMap(map, raw.value, {
+        ttl: raw.expires ? raw.expires - Date.now() : undefined,
+      });
+    }
+
+    return false;
   }
 
   async mapIncrease(

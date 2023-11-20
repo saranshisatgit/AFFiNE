@@ -140,6 +140,13 @@ export class RedisCache implements Cache {
     return this.redis.hget(map, key).catch(() => undefined);
   }
 
+  async mapDelete(map: string, key: string): Promise<boolean> {
+    return this.redis
+      .hdel(map, key)
+      .then(v => v > 0)
+      .catch(() => false);
+  }
+
   async mapRandomKey(map: string): Promise<string | undefined> {
     return this.redis
       .hrandfield(map, 1)
