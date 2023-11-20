@@ -9,8 +9,8 @@ const CacheProvider: FactoryProvider = {
   provide: LocalCache,
   useFactory: (config: Config) => {
     return config.redis.enabled
-      ? new LocalCache()
-      : new RedisCache(new Redis(config.redis));
+      ? new RedisCache(new Redis(config.redis))
+      : new LocalCache();
   },
   inject: [Config],
 };
