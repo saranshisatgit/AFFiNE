@@ -97,11 +97,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
               try {
                 applyUpdate(doc, u);
               } catch (e) {
-                this.logger.error(
-                  `Failed to apply update: ${updates
-                    .map(u => u.toString('hex'))
-                    .join('\n')}`
-                );
+                this.logger.error('Failed to apply update', e);
               }
             });
           });
@@ -149,7 +145,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`jwst apply update failed for ${guid}: ${e}`);
         log = true;
       } finally {
-        if (log) {
+        if (log && this.config.node.dev) {
           this.logger.warn(
             `Updates: ${updates.map(u => u.toString('hex')).join('\n')}`
           );
@@ -223,8 +219,8 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
         .pipe(retry(retryTimes)) // retry until seq num not conflict
         .subscribe({
           next: () => {
-            this.logger.verbose(
-              `pushed 1 update for workspace: ${workspaceId}, guid: ${guid}`
+            this.logger.debug(
+              `pushed 1 update for ${guid} in workspace ${workspaceId}`
             );
             resolve();
           },
@@ -234,10 +230,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
           },
         });
     }).then(() => {
-      return this.cache.mapIncrease(
-        'doc:manager:updates',
-        `${workspaceId}::${guid}`
-      );
+      return this.updateCachedUpdatesCount(workspaceId, guid, 1);
     });
   }
 
@@ -272,8 +265,8 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
         .pipe(retry(retryTimes)) // retry until seq num not conflict
         .subscribe({
           next: () => {
-            this.logger.verbose(
-              `pushed ${updates.length} updates for workspace: ${workspaceId}, guid: ${guid}`
+            this.logger.debug(
+              `pushed ${updates.length} updates for ${guid} in workspace ${workspaceId}`
             );
             resolve();
           },
@@ -283,7 +276,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
           },
         });
     }).then(() => {
-      return this.updateCachedUpdatesCount(workspaceId, guid, 1);
+      return this.updateCachedUpdatesCount(workspaceId, guid, updates.length);
     });
   }
 
@@ -487,6 +480,9 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
     );
 
     await this.upsert(workspaceId, id, doc, last.seq);
+    this.logger.debug(
+      `Squashed ${updates.length} updates for ${id} in workspace ${workspaceId}`
+    );
     await this.db.update.deleteMany({
       where: {
         id,
@@ -498,7 +494,6 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
     });
 
     await this.updateCachedUpdatesCount(workspaceId, id, -updates.length);
-
     return doc;
   }
 
