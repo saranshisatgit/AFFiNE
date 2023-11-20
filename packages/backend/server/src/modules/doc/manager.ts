@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Snapshot, Update } from '@prisma/client';
 import { chunk } from 'lodash-es';
 import { defer, retry } from 'rxjs';
@@ -68,7 +69,8 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
     @Inject('DOC_MANAGER_AUTOMATION')
     protected readonly automation: boolean,
     protected readonly config: Config,
-    protected readonly metrics: Metrics
+    protected readonly metrics: Metrics,
+    private readonly event: EventEmitter2
   ) {}
 
   onModuleInit() {
@@ -393,7 +395,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
     workspaceId: string,
     guid: string,
     doc: Doc,
-    seq?: number
+    initialSeq?: number
   ) {
     const blob = Buffer.from(encodeStateAsUpdate(doc));
     const state = Buffer.from(encodeStateVector(doc));
@@ -417,7 +419,7 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
         workspaceId,
         blob,
         state,
-        seq,
+        seq: initialSeq,
       },
       update: {
         blob,
@@ -461,6 +463,10 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
 
     const { id, workspaceId } = first;
 
+    if (snapshot) {
+      this.event.emit('doc:manager:snapshot:beforeUpdate', snapshot);
+    }
+
     await this.upsert(workspaceId, id, doc, last.seq);
     await this.db.update.deleteMany({
       where: {
@@ -496,6 +502,9 @@ export class DocManager implements OnModuleInit, OnModuleDestroy {
       // reset
       if (seq >= MAX_SEQ_NUM) {
         await this.db.snapshot.update({
+          select: {
+            seq: true,
+          },
           where: {
             id_workspaceId: {
               workspaceId,
