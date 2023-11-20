@@ -22,7 +22,7 @@ import { WebpackS3Plugin, gitShortHash } from './s3-plugin.js';
 
 const IN_CI = !!process.env.CI;
 
-export const rootPath = fileURLToPath(new URL('..', import.meta.url));
+export const rootPath = join(fileURLToPath(import.meta.url), '..', '..');
 const workspaceRoot = join(rootPath, '..', '..', '..');
 
 const require = createRequire(rootPath);
@@ -114,7 +114,10 @@ export const createConfiguration: (
         buildFlags.mode === 'production'
           ? 'js/chunk.[name]-[contenthash:8].js'
           : 'js/chunk.[name].js',
-      assetModuleFilename: 'assets/[name]-[contenthash:8][ext][query]',
+      assetModuleFilename:
+        buildFlags.mode === 'production'
+          ? 'assets/[name]-[contenthash:8][ext][query]'
+          : '[name][ext]',
       devtoolModuleFilenameTemplate: 'webpack://[namespace]/[resource-path]',
       hotUpdateChunkFilename: 'hot/[id].[fullhash].js',
       hotUpdateMainFilename: 'hot/[runtime].[fullhash].json',
@@ -225,17 +228,6 @@ export const createConfiguration: (
       rules: [
         {
           test: /\.m?js?$/,
-          enforce: 'pre',
-          use: [
-            {
-              loader: require.resolve('source-map-loader'),
-              options: {
-                filterSourceMappingUrl: (_url: string) => {
-                  return false;
-                },
-              },
-            },
-          ],
           resolve: {
             fullySpecified: false,
           },
@@ -292,7 +284,7 @@ export const createConfiguration: (
                   },
                 },
               ],
-              exclude: [/node_modules/],
+              exclude: [/node_modules/, /\.assets\.svg$/],
             },
             {
               test: /\.(png|jpg|gif|svg|webp|mp4)$/,
