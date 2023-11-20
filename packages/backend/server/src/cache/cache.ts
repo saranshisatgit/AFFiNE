@@ -22,7 +22,7 @@ export interface Cache {
   pushBack(key: string, ...values: any[]): Promise<number>;
   pushFront(key: string, ...values: any[]): Promise<number>;
   len(key: string): Promise<number>;
-  list(key: string, start: number, count?: number): Promise<any[]>;
+  list(key: string, start: number, end: number): Promise<any[]>;
   popFront(key: string, count?: number): Promise<any[]>;
   popBack(key: string, count?: number): Promise<any[]>;
 
@@ -37,6 +37,7 @@ export interface Cache {
   mapDecrease(map: string, key: string, count?: number): Promise<number>;
   mapGet(map: string, key: string): Promise<any>;
   mapDelete(map: string, key: string): Promise<boolean>;
+  mapKeys(map: string): Promise<string[]>;
   mapRandomKey(map: string): Promise<string | undefined>;
   mapLen(map: string): Promise<number>;
 }
@@ -102,7 +103,7 @@ export class LocalCache implements Cache {
   async ttl(key: string): Promise<number> {
     return this.kv
       .get(key, { raw: true })
-      .then(raw => raw?.expires ?? Infinity)
+      .then(raw => (raw?.expires ? raw.expires - Date.now() : Infinity))
       .catch(() => 0);
   }
 
@@ -165,24 +166,33 @@ export class LocalCache implements Cache {
     return this.getArray(key).then(v => v?.value.length ?? 0);
   }
 
-  async list(key: string, start: number, count: number = 1): Promise<any[]> {
+  /**
+   * list array elements with `[start, end]`
+   * the end indice is inclusive
+   */
+  async list(key: string, start: number, end: number): Promise<any[]> {
     const raw = await this.getArray(key);
     if (raw?.value) {
-      return raw.value.slice(start, start + count);
+      start = (raw.value.length + start) % raw.value.length;
+      end = ((raw.value.length + end) % raw.value.length) + 1;
+      return raw.value.slice(start, end);
     } else {
       return [];
     }
   }
 
-  private async trim(
-    key: string,
-    start: number,
-    length: number
-  ): Promise<any[]> {
-    const list = await this.getArray(key);
-    if (list) {
-      const result = list.value.splice(start, start + length);
-      await this.set(key, list);
+  private async trim(key: string, start: number, end: number): Promise<any[]> {
+    const raw = await this.getArray(key);
+    if (raw) {
+      start = (raw.value.length + start) % raw.value.length;
+      // make negative end index work, and end indice is inclusive
+      end = ((raw.value.length + end) % raw.value.length) + 1;
+      const result = raw.value.splice(start, end);
+
+      await this.set(key, raw.value, {
+        ttl: raw.expires ? raw.expires - Date.now() : undefined,
+      });
+
       return result;
     }
 
@@ -190,11 +200,11 @@ export class LocalCache implements Cache {
   }
 
   async popFront(key: string, count: number = 1): Promise<any[]> {
-    return this.trim(key, 0, count);
+    return this.trim(key, 0, count - 1);
   }
 
   async popBack(key: string, count: number = 1): Promise<any[]> {
-    return this.trim(key, -count, count);
+    return this.trim(key, -count, count - 1);
   }
 
   // map operations
@@ -221,7 +231,7 @@ export class LocalCache implements Cache {
     value: Record<string, any>,
     opts: CacheSetOptions = {}
   ) {
-    return this.kv.set(map, value, opts.ttl).then(() => false);
+    return this.kv.set(map, value, opts.ttl).then(() => true);
   }
 
   async mapGet(map: string, key: string): Promise<any> {
@@ -262,7 +272,7 @@ export class LocalCache implements Cache {
     key: string,
     count: number = 1
   ): Promise<number> {
-    const prev = this.mapGet(map, key);
+    const prev = await this.mapGet(map, key);
 
     if (typeof prev !== 'number') {
       throw new Error(
@@ -283,14 +293,18 @@ export class LocalCache implements Cache {
     return this.mapIncrease(map, key, -count);
   }
 
-  async mapRandomKey(map: string): Promise<string | undefined> {
+  async mapKeys(map: string): Promise<string[]> {
     const raw = await this.getMap(map);
     if (raw) {
-      const keys = Object.keys(raw.value);
-      return keys[Math.floor(Math.random() * keys.length)];
+      return Object.keys(raw.value);
     }
 
-    return undefined;
+    return [];
+  }
+
+  async mapRandomKey(map: string): Promise<string | undefined> {
+    const keys = await this.mapKeys(map);
+    return keys[Math.floor(Math.random() * keys.length)];
   }
 
   async mapLen(map: string): Promise<number> {

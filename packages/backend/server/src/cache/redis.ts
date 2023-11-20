@@ -7,12 +7,15 @@ export class RedisCache implements Cache {
 
   // standard operation
   async get(key: string): Promise<any> {
-    return this.redis.get(key).then(v => {
-      if (v) {
-        return JSON.parse(v);
-      }
-      return undefined;
-    });
+    return this.redis
+      .get(key)
+      .then(v => {
+        if (v) {
+          return JSON.parse(v);
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
   }
 
   async set(
@@ -22,37 +25,39 @@ export class RedisCache implements Cache {
   ): Promise<boolean> {
     if (opts.ttl) {
       return this.redis
-        .set(key, value, 'PX', opts.ttl)
+        .set(key, JSON.stringify(value), 'PX', opts.ttl)
         .then(() => true)
         .catch(() => false);
     }
 
     return this.redis
-      .set(key, value)
+      .set(key, JSON.stringify(value))
       .then(() => true)
       .catch(() => false);
   }
 
-  increase(key: string, count: number = 1): Promise<number> {
+  async increase(key: string, count: number = 1): Promise<number> {
     return this.redis.incrby(key, count).catch(() => 0);
   }
-  decrease(key: string, count: number = 1): Promise<number> {
+
+  async decrease(key: string, count: number = 1): Promise<number> {
     return this.redis.decrby(key, count).catch(() => 0);
   }
 
   setnx(key: string, value: any, opts: CacheSetOptions = {}): Promise<boolean> {
     if (opts.ttl) {
       return this.redis
-        .set(key, value, 'PX', opts.ttl, 'NX')
+        .set(key, JSON.stringify(value), 'PX', opts.ttl, 'NX')
         .then(v => !!v)
         .catch(() => false);
     }
 
     return this.redis
-      .set(key, value, 'NX')
+      .set(key, JSON.stringify(value), 'NX')
       .then(v => !!v)
       .catch(() => false);
   }
+
   async delete(key: string): Promise<boolean> {
     return this.redis
       .del(key)
@@ -68,7 +73,7 @@ export class RedisCache implements Cache {
   }
 
   async ttl(key: string): Promise<number> {
-    return this.ttl(key).catch(() => 0);
+    return this.redis.ttl(key).catch(() => 0);
   }
 
   async expire(key: string, ttl: number): Promise<boolean> {
@@ -84,39 +89,46 @@ export class RedisCache implements Cache {
   }
 
   async pushBack(key: string, ...values: any[]): Promise<number> {
-    return this.redis.rpush(key, ...values).catch(() => 0);
+    return this.redis
+      .rpush(key, ...values.map(v => JSON.stringify(v)))
+      .catch(() => 0);
   }
 
   async pushFront(key: string, ...values: any[]): Promise<number> {
-    return this.redis.lpush(key, ...values).catch(() => 0);
+    return this.redis
+      .lpush(key, ...values.map(v => JSON.stringify(v)))
+      .catch(() => 0);
   }
 
   async len(key: string): Promise<number> {
     return this.redis.llen(key).catch(() => 0);
   }
 
-  async list(key: string, start: number, count: number = 1): Promise<any[]> {
-    return this.redis.lrange(key, start, start + count).catch(() => []);
+  async list(key: string, start: number, end: number): Promise<any[]> {
+    return this.redis
+      .lrange(key, start, end)
+      .then(data => data.map(v => JSON.parse(v)))
+      .catch(() => []);
   }
 
   async popFront(key: string, count: number = 1): Promise<any[]> {
     return this.redis
       .lpop(key, count)
-      .then(v => v ?? [])
+      .then(data => (data ?? []).map(v => JSON.parse(v)))
       .catch(() => []);
   }
 
   async popBack(key: string, count: number = 1): Promise<any[]> {
     return this.redis
       .rpop(key, count)
-      .then(v => v ?? [])
+      .then(data => (data ?? []).map(v => JSON.parse(v)))
       .catch(() => []);
   }
 
   // map operations
   async mapSet(map: string, key: string, value: any): Promise<boolean> {
     return this.redis
-      .hset(map, key, value)
+      .hset(map, key, JSON.stringify(value))
       .then(v => v > 0)
       .catch(() => false);
   }
@@ -128,6 +140,7 @@ export class RedisCache implements Cache {
   ): Promise<number> {
     return this.redis.hincrby(map, key, count);
   }
+
   async mapDecrease(
     map: string,
     key: string,
@@ -137,7 +150,10 @@ export class RedisCache implements Cache {
   }
 
   async mapGet(map: string, key: string): Promise<any> {
-    return this.redis.hget(map, key).catch(() => undefined);
+    return this.redis
+      .hget(map, key)
+      .then(v => (v ? JSON.parse(v) : undefined))
+      .catch(() => undefined);
   }
 
   async mapDelete(map: string, key: string): Promise<boolean> {
@@ -145,6 +161,10 @@ export class RedisCache implements Cache {
       .hdel(map, key)
       .then(v => v > 0)
       .catch(() => false);
+  }
+
+  async mapKeys(map: string): Promise<string[]> {
+    return this.redis.hkeys(map).catch(() => []);
   }
 
   async mapRandomKey(map: string): Promise<string | undefined> {
